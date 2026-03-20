@@ -58,7 +58,7 @@ You should see the Ubuntu welcome message.
 Paste this single command and press Enter:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/openclaw-vps/main/vps/digitalocean/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/no-name-labs/openclaw-install-scripts/main/vps/digitalocean/install.sh)
 ```
 
 The installer runs 5 stages automatically:
@@ -157,7 +157,7 @@ export BIND_TELEGRAM_LINK=https://t.me/c/1234567890/2
 export AUTO_CONFIRM=true
 export NON_INTERACTIVE=true
 
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/openclaw-vps/main/vps/digitalocean/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/no-name-labs/openclaw-install-scripts/main/vps/digitalocean/install.sh)
 ```
 
 ---

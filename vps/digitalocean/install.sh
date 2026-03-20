@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # OpenClaw VPS Installer — DigitalOcean / Ubuntu
-# https://github.com/YOUR_ORG/openclaw-vps
+# https://github.com/no-name-labs/openclaw-install-scripts
 # MIT License
 #
 # Usage (one-liner):
-#   bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/openclaw-vps/main/vps/digitalocean/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/no-name-labs/openclaw-install-scripts/main/vps/digitalocean/install.sh)
 #
 # Non-interactive (pre-set env vars to skip prompts):
 #   RUNTIME_PROVIDER=openai OPENAI_API_KEY=sk-... TELEGRAM_BOT_TOKEN=... \
