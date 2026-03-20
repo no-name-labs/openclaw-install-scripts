@@ -21,11 +21,11 @@ NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 AUTO_CONFIRM="${AUTO_CONFIRM:-false}"
 NODE_MAJOR="${NODE_MAJOR:-22}"
 
-# LLM provider — set one of these to skip the interactive menu
-RUNTIME_PROVIDER="${RUNTIME_PROVIDER:-}"         # openai | anthropic | openrouter
+# LLM provider — set these to skip the interactive menus
+RUNTIME_PROVIDER="${RUNTIME_PROVIDER:-}"         # openai | anthropic
+RUNTIME_AUTH_METHOD="${RUNTIME_AUTH_METHOD:-}"   # api_key | codex (openai) | oauth (anthropic)
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
-OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}"
 
 # Telegram
 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
@@ -273,84 +273,193 @@ restart_gateway() {
   wait_for_gateway 60 || die "Gateway did not become healthy after restart."
 }
 
+# ── LLM provider helpers ──────────────────────────────────────────────────────
+
+is_valid_claude_oauth_token() {
+  [[ "${1:-}" =~ ^sk-ant-oat[0-9]+-[A-Za-z0-9_-]{20,}$ ]]
+}
+
+ensure_claude_cli() {
+  if command -v claude >/dev/null 2>&1; then return 0; fi
+  log_info "Anthropic setup-token requires Claude CLI — installing @anthropic-ai/claude-code."
+  run_as_root npm install -g @anthropic-ai/claude-code
+  require_cmd claude
+}
+
+write_auth_profile() {
+  local profile_id="$1" provider="$2" auth_type="$3" credential="$4"
+  local store="${OPENCLAW_HOME}/agents/main/agent/auth-profiles.json"
+  python3 - "${store}" "${profile_id}" "${provider}" "${auth_type}" "${credential}" <<'PY'
+import json, pathlib, sys, time
+store = pathlib.Path(sys.argv[1])
+profile_id, provider, auth_type, credential = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+store.parent.mkdir(parents=True, exist_ok=True)
+try:
+    data = json.loads(store.read_text(encoding="utf-8")) if store.exists() else {}
+except Exception:
+    data = {}
+if not isinstance(data, dict):
+    data = {}
+data["version"] = 1
+profiles = data.setdefault("profiles", {})
+if auth_type == "api_key":
+    profiles[profile_id] = {"type": "api_key", "provider": provider, "key": credential}
+elif auth_type == "token":
+    profiles[profile_id] = {
+        "type": "token", "provider": provider, "token": credential,
+        "expires": int(time.time() * 1000) + 365 * 24 * 60 * 60 * 1000,
+    }
+store.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+print(f"Auth profile written: {profile_id}")
+PY
+}
+
+run_anthropic_setup_token() {
+  local token=""
+
+  # Try auto-capture via script(1) so the user only does one action
+  if command -v script >/dev/null 2>&1; then
+    local tmplog; tmplog="$(mktemp)"
+    if script -q -e -c "claude setup-token" "${tmplog}" 2>/dev/null; then
+      token="$(grep -oP 'sk-ant-oat[0-9]+-[A-Za-z0-9_-]+' "${tmplog}" 2>/dev/null | tail -1 || true)"
+    fi
+    rm -f "${tmplog}"
+  else
+    claude setup-token || true
+  fi
+
+  local attempts=0
+  while ! is_valid_claude_oauth_token "${token}" && (( attempts < 3 )); do
+    attempts=$(( attempts + 1 ))
+    [[ "${attempts}" -gt 1 ]] && step "Run:  claude setup-token  — then paste the token below."
+    step "Paste the setup-token (starts with sk-ant-oat...):"
+    read -r -s -p "Token: " token; echo
+    token="${token// /}"
+  done
+
+  is_valid_claude_oauth_token "${token}" || die "Invalid setup-token after 3 attempts."
+  write_auth_profile "anthropic:oauth" "anthropic" "token" "${token}"
+  log_info "Anthropic setup-token applied."
+}
+
+authenticate_runtime_provider() {
+  case "${RUNTIME_PROVIDER}:${RUNTIME_AUTH_METHOD}" in
+    *:api_key) return 0 ;;  # Already done during configure_llm_provider
+    openai:codex)
+      section "OpenAI — Codex OAuth"
+      step "A browser window will open for OpenAI authentication."
+      step "Complete the login, then return here."
+      with_openclaw_env openclaw models auth login --provider openai-codex \
+        || die "OpenAI Codex OAuth login failed."
+      log_info "OpenAI Codex OAuth login complete."
+      ;;
+    anthropic:oauth)
+      section "Anthropic — setup-token"
+      step "You need a Claude Pro/Max subscription for this method."
+      ensure_claude_cli
+      run_anthropic_setup_token
+      ;;
+  esac
+}
+
 # ── LLM provider setup ────────────────────────────────────────────────────────
 
 configure_llm_provider() {
   section "LLM Provider Setup"
+
+  # ── 1. Provider ─────────────────────────────────────────────────────────────
   menu_select RUNTIME_PROVIDER "Select your LLM provider:" \
-    "openai|OpenAI (GPT models)" \
-    "anthropic|Anthropic (Claude models)" \
-    "openrouter|OpenRouter (multi-provider)"
+    "openai|OpenAI" \
+    "anthropic|Anthropic (Claude)"
 
-  local api_key_var=""
-  case "${RUNTIME_PROVIDER}" in
-    openai)      api_key_var="OPENAI_API_KEY" ;;
-    anthropic)   api_key_var="ANTHROPIC_API_KEY" ;;
-    openrouter)  api_key_var="OPENROUTER_API_KEY" ;;
-    *) die "Unknown provider: ${RUNTIME_PROVIDER}" ;;
-  esac
-
-  prompt_secret "${api_key_var}" "Enter your ${RUNTIME_PROVIDER} API key"
-  local api_key="${!api_key_var}"
-  [[ -n "${api_key}" ]] || die "API key is required."
-
-  upsert_env_var "${OPENCLAW_HOME}/.env" "${api_key_var}" "${api_key}"
-  upsert_env_var "${OPENCLAW_HOME}/.env" "RUNTIME_PROVIDER" "${RUNTIME_PROVIDER}"
-
-  # Determine profile id and default model
-  local profile_id="" default_model=""
+  # ── 2. Auth method ──────────────────────────────────────────────────────────
+  local auth_opt_a="" auth_opt_b=""
   case "${RUNTIME_PROVIDER}" in
     openai)
-      profile_id="openai:main"
-      default_model="openai/gpt-4o"
+      auth_opt_a="api_key|API key  (sk-proj-...)"
+      auth_opt_b="codex|ChatGPT subscription — Codex OAuth"
       ;;
     anthropic)
-      profile_id="anthropic:main"
-      default_model="anthropic/claude-opus-4-6"
-      ;;
-    openrouter)
-      profile_id="openrouter:main"
-      default_model="openrouter/anthropic/claude-opus-4-6"
+      auth_opt_a="api_key|API key  (sk-ant-api...)"
+      auth_opt_b="oauth|Claude subscription — setup-token  (sk-ant-oat...)"
       ;;
   esac
+  menu_select RUNTIME_AUTH_METHOD "Authentication method:" "${auth_opt_a}" "${auth_opt_b}"
 
-  # Write provider auth profile and default model to openclaw.json
+  # ── 3. Resolve profile / model / mode ───────────────────────────────────────
+  local profile_id="" default_model="" auth_mode_json="" provider_in_profile=""
+  case "${RUNTIME_PROVIDER}:${RUNTIME_AUTH_METHOD}" in
+    openai:api_key)
+      profile_id="openai:api-key"; default_model="openai/gpt-4o"
+      auth_mode_json="api_key";    provider_in_profile="openai" ;;
+    openai:codex)
+      profile_id="openai-codex:oauth"; default_model="openai-codex/gpt-5.4"
+      auth_mode_json="oauth";          provider_in_profile="openai-codex" ;;
+    anthropic:api_key)
+      profile_id="anthropic:api-key"; default_model="anthropic/claude-opus-4-6"
+      auth_mode_json="api_key";        provider_in_profile="anthropic" ;;
+    anthropic:oauth)
+      profile_id="anthropic:oauth"; default_model="anthropic/claude-opus-4-6"
+      auth_mode_json="token";        provider_in_profile="anthropic" ;;
+    *) die "Unsupported provider/auth combination: ${RUNTIME_PROVIDER}:${RUNTIME_AUTH_METHOD}" ;;
+  esac
+
+  # ── 4. Collect API key (api_key mode only) ───────────────────────────────────
+  local api_key=""
+  case "${RUNTIME_PROVIDER}:${RUNTIME_AUTH_METHOD}" in
+    openai:api_key)
+      prompt_secret OPENAI_API_KEY "Enter your OpenAI API key"
+      api_key="${OPENAI_API_KEY}"
+      upsert_env_var "${OPENCLAW_HOME}/.env" "OPENAI_API_KEY" "${api_key}"
+      ;;
+    anthropic:api_key)
+      prompt_secret ANTHROPIC_API_KEY "Enter your Anthropic API key"
+      api_key="${ANTHROPIC_API_KEY}"
+      upsert_env_var "${OPENCLAW_HOME}/.env" "ANTHROPIC_API_KEY" "${api_key}"
+      ;;
+  esac
+  upsert_env_var "${OPENCLAW_HOME}/.env" "RUNTIME_PROVIDER"    "${RUNTIME_PROVIDER}"
+  upsert_env_var "${OPENCLAW_HOME}/.env" "RUNTIME_AUTH_METHOD" "${RUNTIME_AUTH_METHOD}"
+
+  # ── 5. Write openclaw.json (profile definition + model defaults) ─────────────
   python3 - "${OPENCLAW_HOME}/openclaw.json" \
-    "${RUNTIME_PROVIDER}" "${profile_id}" "${default_model}" "${api_key}" <<'PY'
+    "${provider_in_profile}" "${profile_id}" "${default_model}" "${auth_mode_json}" "${api_key:-}" <<'PY'
 import json, pathlib, sys
-
-cfg_path   = pathlib.Path(sys.argv[1])
-provider   = sys.argv[2]
-profile_id = sys.argv[3]
-model      = sys.argv[4]
-api_key    = sys.argv[5]
+cfg_path          = pathlib.Path(sys.argv[1])
+provider_profile  = sys.argv[2]
+profile_id        = sys.argv[3]
+model             = sys.argv[4]
+auth_mode         = sys.argv[5]
+api_key           = sys.argv[6] if len(sys.argv) > 6 else ""
 
 data = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
 
-# Auth profile
 auth = data.setdefault("auth", {})
 profiles = auth.setdefault("profiles", {})
-profiles[profile_id] = {"provider": provider, "mode": "api_key"}
+profiles[profile_id] = {"provider": provider_profile, "mode": auth_mode}
 
-# Store key under auth.keys (openclaw reads this at runtime)
-keys = auth.setdefault("keys", {})
-keys[profile_id] = api_key
+# For api_key mode also store inline in auth.keys (gateway fallback)
+if api_key and auth_mode == "api_key":
+    auth.setdefault("keys", {})[profile_id] = api_key
 
-# Default agent model
 agents = data.setdefault("agents", {})
 if isinstance(agents, list):
     agents = {"list": agents}
     data["agents"] = agents
 defaults = agents.setdefault("defaults", {})
 defaults["profile"] = profile_id
-model_cfg = defaults.setdefault("model", {})
-model_cfg["primary"] = model
+defaults.setdefault("model", {})["primary"] = model
 
 cfg_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-print(f"Configured provider={provider} profile={profile_id} model={model}")
+print(f"Configured provider={provider_profile} profile={profile_id} model={model}")
 PY
 
-  log_info "LLM provider configured: ${RUNTIME_PROVIDER} (${profile_id})"
+  # ── 6. Write auth-profiles.json for api_key ──────────────────────────────────
+  if [[ "${RUNTIME_AUTH_METHOD}" == "api_key" ]]; then
+    write_auth_profile "${profile_id}" "${provider_in_profile}" "api_key" "${api_key}"
+  fi
+
+  log_info "LLM provider configured: ${RUNTIME_PROVIDER}/${RUNTIME_AUTH_METHOD} (${profile_id})"
 }
 
 # ── Telegram setup ────────────────────────────────────────────────────────────
@@ -637,6 +746,12 @@ main() {
   section "Stage 3/5: LLM provider"
   configure_llm_provider
   restart_gateway
+  # OAuth flows run after restart (gateway must be up for codex login callback)
+  authenticate_runtime_provider
+  # If OAuth tokens were just written, restart once more to load them
+  case "${RUNTIME_AUTH_METHOD:-api_key}" in
+    codex|oauth) restart_gateway ;;
+  esac
 
   # ── Stage 4/5: Telegram ────────────────────────────────────────────────────
   section "Stage 4/5: Telegram"

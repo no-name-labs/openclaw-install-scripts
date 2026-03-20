@@ -159,8 +159,9 @@ To stop the tunnel: press `Ctrl+C` in the terminal tab running the ssh command.
 Pre-set environment variables to skip all prompts — useful for scripting or re-installs:
 
 ```bash
-export RUNTIME_PROVIDER=openai          # openai | anthropic | openrouter
-export OPENAI_API_KEY=sk-...            # or ANTHROPIC_API_KEY / OPENROUTER_API_KEY
+export RUNTIME_PROVIDER=openai          # openai | anthropic
+export RUNTIME_AUTH_METHOD=api_key      # api_key | codex (openai) | oauth (anthropic)
+export OPENAI_API_KEY=sk-...            # or ANTHROPIC_API_KEY
 export TELEGRAM_BOT_TOKEN=123456:ABC...
 export BIND_MODE=topic                  # topic | direct
 export BIND_TELEGRAM_LINK=https://t.me/c/1234567890/2
