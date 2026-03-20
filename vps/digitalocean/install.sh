@@ -446,9 +446,8 @@ agents = data.setdefault("agents", {})
 if isinstance(agents, list):
     agents = {"list": agents}
     data["agents"] = agents
-defaults = agents.setdefault("defaults", {})
-defaults["profile"] = profile_id
-defaults.setdefault("model", {})["primary"] = model
+# Set default model only — agents.defaults.profile is not a valid key in openclaw 2026.3.x+
+agents.setdefault("defaults", {}).setdefault("model", {})["primary"] = model
 
 cfg_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 print(f"Configured provider={provider_profile} profile={profile_id} model={model}")
