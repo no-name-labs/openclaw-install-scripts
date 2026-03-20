@@ -85,29 +85,35 @@ The installer runs 5 stages automatically:
 
 ### LLM provider menu
 
-When prompted, use ↑/↓ to select your provider and press Enter:
+When prompted, use ↑/↓ to select your provider and auth method, then press Enter.
 
-<!-- screenshot: 05-provider-menu.png -->
-> 📸 _Add screenshot: Interactive provider selection menu_
+**If you choose OAuth (Codex or Anthropic setup-token):** the installer will open a browser URL for you to authenticate. On a VPS, it prints the URL — open it on your local machine, complete the login, then paste the redirect URL back into the terminal:
+
+![OpenAI Codex OAuth flow](screenshots/llm-provider-oauth.png)
 
 ### Telegram pairing
 
-When the installer reaches Stage 4:
+When the installer reaches Stage 4, it asks for your bot token, enables the plugin, and waits for you to pair:
+
+![Stage 4 Telegram setup in terminal](screenshots/install-telegram-stage.png)
+
+Steps:
 
 1. Open Telegram and find your bot (search for its username).
 2. Press **Start** if you haven't chatted with it before.
-3. Send any message — the bot will reply with a pairing request.
+3. Send any message — the bot replies with a pairing code.
 4. Return to the terminal and press **Enter** to approve.
 
-<!-- screenshot: 06-telegram-pairing.png -->
-> 📸 _Add screenshot: Telegram showing bot pairing message_
+Once approved, the bot confirms access and is ready to use:
+
+![Telegram pairing — access approved and bot responding](screenshots/telegram-pairing.png)
 
 ### Install summary
 
 At the end the installer prints a summary including your gateway token.
 **Copy and save the gateway token** — you'll need it to connect apps.
 
-<!-- screenshot: 07-install-summary.png -->
+<!-- screenshot: install-summary.png -->
 > 📸 _Add screenshot: Final install summary with gateway token_
 
 ---
