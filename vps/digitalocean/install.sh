@@ -736,11 +736,21 @@ main() {
 
   mkdir -p "${OPENCLAW_HOME}/logs"
 
-  # Start gateway once to bootstrap the config directory and openclaw.json.
-  # --allow-unconfigured is required because openclaw.json does not exist yet.
+  # Write a minimal config so the gateway can start without --allow-unconfigured.
+  # configure_llm_provider will merge into this later.
+  if [[ ! -f "${OPENCLAW_HOME}/openclaw.json" ]]; then
+    python3 -c "
+import json, pathlib
+p = pathlib.Path('${OPENCLAW_HOME}/openclaw.json')
+p.parent.mkdir(parents=True, exist_ok=True)
+p.write_text(json.dumps({'gateway': {'mode': 'local'}}, indent=2) + '\n')
+"
+    log_info "Minimal openclaw.json written (gateway.mode=local)."
+  fi
+
   log_info "Starting gateway to initialise config."
-  start_gateway "--allow-unconfigured"
-  wait_for_gateway 60 || die "Gateway failed to start on first boot."
+  start_gateway
+  wait_for_gateway 120 || die "Gateway failed to start on first boot."
 
   # ── Stage 3/5: LLM provider ────────────────────────────────────────────────
   section "Stage 3/5: LLM provider"
