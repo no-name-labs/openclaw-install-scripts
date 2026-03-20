@@ -112,15 +112,21 @@ The installer runs 5 stages automatically:
 
 When prompted, use ↑/↓ to select your provider and auth method, then press Enter.
 
+![LLM provider selection menu](screenshots/install-provider-menu.png)
+
 **If you choose OAuth (Codex or Anthropic setup-token):** the installer will open a browser URL for you to authenticate. On a VPS, it prints the URL — open it on your local machine, complete the login, then paste the redirect URL back into the terminal:
 
 ![OpenAI Codex OAuth flow](screenshots/llm-provider-oauth.png)
 
 ### Telegram pairing
 
-When the installer reaches Stage 4, it asks for your bot token, enables the plugin, and waits for you to pair:
+When the installer reaches Stage 4, it asks for your bot token:
 
-![Stage 4 Telegram setup in terminal](screenshots/install-telegram-stage.png)
+![Entering bot token](screenshots/install-telegram-token.png)
+
+After that it enables the plugin and waits for you to pair:
+
+![Telegram pairing prompt in terminal](screenshots/install-telegram-stage.png)
 
 Steps:
 
@@ -132,6 +138,8 @@ Steps:
 ### Binding target
 
 After pairing, the installer asks where the bot should reply:
+
+![Binding target selection](screenshots/install-binding-menu.png)
 
 - **Group topic** — the bot listens to a specific topic inside a Telegram group (recommended for teams). You'll paste a topic link, e.g. `https://t.me/c/1234567890/2`.
 - **Direct chat** — the bot replies directly in a 1-on-1 chat with you. Simplest option for solo use.
@@ -145,10 +153,9 @@ Once pairing and binding are complete, the bot confirms access and responds imme
 ### Install summary
 
 At the end the installer prints a summary including your gateway token.
-**Copy and save the gateway token** — you'll need it to connect apps.
+**Copy and save the gateway token** — you'll need it to connect to the UI in the next step.
 
-<!-- screenshot: install-summary.png -->
-> 📸 _Add screenshot: Final install summary with gateway token_
+![Install summary with gateway token](screenshots/install-summary.png)
 
 ---
 
@@ -166,6 +173,12 @@ ssh -i ~/.ssh/YOUR_KEY_NAME -L 18789:127.0.0.1:18789 root@YOUR_DROPLET_IP -N
 ```
 
 The command will appear to hang — that's correct, the tunnel is running.
+
+> **Port already in use?** If you see `bind: Address already in use`, just pick any other local port — only the left side changes:
+> ```bash
+> ssh -i ~/.ssh/YOUR_KEY_NAME -L 18790:127.0.0.1:18789 root@YOUR_DROPLET_IP -N
+> ```
+> Then open `http://localhost:18790` instead.
 
 > **Tip — persistent tunnel via SSH config:**
 > Add this to `~/.ssh/config` to skip the `-i` flag entirely:
@@ -207,8 +220,7 @@ Click **Add**, then **Open** — the tunnel runs while PuTTY is connected.
 
 ---
 
-<!-- screenshot: ssh-tunnel.png -->
-> 📸 _Add screenshot: Tunnel command running in local terminal_
+![SSH tunnel running in terminal](screenshots/ssh-tunnel.png)
 
 Now open your browser on your local machine:
 
@@ -216,10 +228,13 @@ Now open your browser on your local machine:
 http://localhost:18789
 ```
 
-You should see the OpenClaw UI.
+On first open you'll see the gateway connection screen. Paste your **gateway token** (printed at the end of the installer) and click **Connect**:
 
-<!-- screenshot: openclaw-ui.png -->
-> 📸 _Add screenshot: OpenClaw UI in the browser_
+![OpenClaw UI — enter gateway token](screenshots/openclaw-ui-connect.png)
+
+Once connected you'll see the Overview dashboard:
+
+![OpenClaw UI — Overview](screenshots/openclaw-ui.png)
 
 To stop the tunnel: press `Ctrl+C` in the terminal/PowerShell window (or close PuTTY).
 
