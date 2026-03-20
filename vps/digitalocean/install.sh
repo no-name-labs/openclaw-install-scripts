@@ -657,12 +657,76 @@ install_startup_cron() {
   log_info "Startup cron installed (openclaw will auto-start on reboot)."
 }
 
+# ── Model allowlist sync ──────────────────────────────────────────────────────
+
+sync_provider_models() {
+  local provider_id=""
+  case "${RUNTIME_PROVIDER}:${RUNTIME_AUTH_METHOD}" in
+    openai:api_key)    provider_id="openai" ;;
+    openai:codex)      provider_id="openai-codex" ;;
+    anthropic:api_key) provider_id="anthropic" ;;
+    anthropic:oauth)   provider_id="anthropic" ;;
+    *) log_warn "Unknown provider combination for model sync, skipping."; return 0 ;;
+  esac
+
+  log_info "Syncing allowed models for provider: ${provider_id}"
+  local models_out=""
+  models_out="$(with_openclaw_env openclaw models list --all --provider "${provider_id}" --plain 2>/dev/null || true)"
+
+  if [[ -z "${models_out}" ]]; then
+    log_warn "No models returned for provider ${provider_id} — skipping model allowlist sync."
+    return 0
+  fi
+
+  python3 - "${OPENCLAW_HOME}/openclaw.json" "${provider_id}" "${models_out}" <<'PY'
+import json, pathlib, sys
+cfg_path = pathlib.Path(sys.argv[1])
+provider_id = sys.argv[2]
+models_raw = sys.argv[3]
+data = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+agents = data.setdefault("agents", {})
+if isinstance(agents, list):
+    agents = {"list": agents}
+    data["agents"] = agents
+defaults = agents.setdefault("defaults", {})
+model_cfg = defaults.setdefault("model", {})
+primary = str(model_cfg.get("primary") or "").strip()
+prefix = provider_id + "/"
+ordered = []
+seen = set()
+for raw in models_raw.splitlines():
+    item = raw.strip()
+    if item and item.startswith(prefix) and item not in seen:
+        ordered.append(item)
+        seen.add(item)
+if primary and primary not in seen:
+    ordered.insert(0, primary)
+    seen.add(primary)
+if not ordered:
+    print(f"No models matched prefix '{prefix}', skipping allowlist write.")
+    raise SystemExit(0)
+defaults["models"] = {m: {} for m in ordered}
+cfg_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+print(f"Wrote model allowlist: {len(ordered)} models for {provider_id}")
+PY
+  log_info "Model allowlist synced for provider: ${provider_id}"
+}
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 print_summary() {
   local gateway_token=""
   gateway_token="$(with_openclaw_env openclaw gateway token --json 2>/dev/null \
     | python3 -c "import json,sys; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || true)"
+  # Fallback: read directly from openclaw.json if CLI command failed/returned empty
+  if [[ -z "${gateway_token}" && -f "${OPENCLAW_HOME}/openclaw.json" ]]; then
+    gateway_token="$(python3 -c "
+import json, pathlib
+d = json.loads(pathlib.Path('${OPENCLAW_HOME}/openclaw.json').read_text())
+t = d.get('gateway',{}).get('auth',{}).get('token','') or d.get('gateway',{}).get('token','')
+print(t)
+" 2>/dev/null || true)"
+  fi
 
   local health_ok="no"
   with_openclaw_env openclaw health --json >/dev/null 2>&1 && health_ok="yes"
@@ -763,6 +827,7 @@ p.write_text(json.dumps({'gateway': {'mode': 'local'}}, indent=2) + '\n')
   authenticate_runtime_provider
   # After OAuth tokens are written (or always for api_key second-pass safety), restart.
   restart_gateway
+  sync_provider_models
 
   # ── Stage 4/5: Telegram ────────────────────────────────────────────────────
   section "Stage 4/5: Telegram"
