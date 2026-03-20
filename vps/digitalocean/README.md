@@ -61,8 +61,7 @@ If you used **password** authentication instead, omit `-i` — you'll be prompte
 
 You should see the Ubuntu welcome message.
 
-<!-- screenshot: ssh-connected.png -->
-> 📸 _Add screenshot: Terminal connected to the droplet_
+![SSH connected](screenshots/ssh-connected.png)
 
 ---
 
@@ -83,9 +82,6 @@ The installer runs 5 stages automatically:
 | 3/5 | You choose your LLM provider and enter your API key |
 | 4/5 | You enter your Telegram bot token, pair the bot, choose binding target |
 | 5/5 | Startup cron installed, summary printed with gateway token |
-
-<!-- screenshot: 04-install-running.png -->
-> 📸 _Add screenshot: Installer stages running in terminal_
 
 ### LLM provider menu
 
