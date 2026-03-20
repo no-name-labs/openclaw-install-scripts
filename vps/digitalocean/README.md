@@ -18,37 +18,50 @@ Connect to the UI from your local browser via SSH tunnel — no domain or open p
 
 Go to [cloud.digitalocean.com](https://cloud.digitalocean.com) → **Create → Droplets**.
 
-Recommended settings:
-- **Region**: closest to you
-- **Image**: Ubuntu 24.04 (LTS) x64
-- **Size**: Basic — 1 vCPU / 2 GB RAM / 50 GB SSD (~$12/mo)
-- **Authentication**: SSH key (recommended) or password
-- Leave all other settings as default
+**OS and size** — select Ubuntu 24.04 (LTS) x64, Basic plan, Regular SSD, $18/mo (2 vCPU / 2 GB RAM / 60 GB SSD):
 
-Click **Create Droplet** and wait ~30 seconds.
+![OS and size selection](screenshots/01-create-droplet-os-size.png)
 
-<!-- screenshot: 01-create-droplet.png -->
-> 📸 _Add screenshot: DigitalOcean droplet creation settings_
+**Region** — pick the datacenter closest to you or your users (optional, any region works):
+
+![Region selection](screenshots/02-create-droplet-region.png)
+
+**Authentication** — select **SSH Key** and choose an existing key, or click **New SSH Key** to add one:
+
+![SSH key selection](screenshots/03-create-droplet-ssh-key.png)
+
+> If you don't have an SSH key yet, follow [GitHub's guide to generating one](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent), then add the public key here.
+
+Leave all other settings as default. Click **Create Droplet** and wait ~30 seconds.
 
 Once created, copy the droplet's **IPv4 address** from the dashboard.
-
-<!-- screenshot: 02-droplet-ready.png -->
-> 📸 _Add screenshot: Dashboard showing droplet IP_
 
 ---
 
 ## Step 2 — Connect via SSH
 
-Open a terminal on your local machine:
+Open a terminal on your local machine. If you added an SSH key during droplet creation:
 
 ```bash
-ssh root@YOUR_DROPLET_IP
+ssh -i ~/.ssh/YOUR_KEY_NAME root@YOUR_DROPLET_IP
 ```
 
-If you used a password instead of an SSH key, enter it when prompted.
+Replace `YOUR_KEY_NAME` with the filename of your private key (e.g. `openclaw-vps`, `id_ed25519`, `id_rsa`).
+Your keys are listed in `~/.ssh/` — run `ls ~/.ssh/` if unsure.
+
+> **Tip — skip the `-i` flag:** add an entry to `~/.ssh/config` so the key is picked up automatically:
+> ```
+> Host YOUR_DROPLET_IP
+>     User root
+>     IdentityFile ~/.ssh/YOUR_KEY_NAME
+> ```
+> After that, `ssh root@YOUR_DROPLET_IP` works without `-i`.
+
+If you used **password** authentication instead, omit `-i` — you'll be prompted for the password.
+
 You should see the Ubuntu welcome message.
 
-<!-- screenshot: 03-ssh-connected.png -->
+<!-- screenshot: ssh-connected.png -->
 > 📸 _Add screenshot: Terminal connected to the droplet_
 
 ---
@@ -111,12 +124,12 @@ An SSH tunnel forwards that port to your local machine — no domain or firewall
 **On your local machine** (new terminal tab, keep the droplet SSH session open):
 
 ```bash
-ssh -L 18789:127.0.0.1:18789 root@YOUR_DROPLET_IP -N
+ssh -i ~/.ssh/YOUR_KEY_NAME -L 18789:127.0.0.1:18789 root@YOUR_DROPLET_IP -N
 ```
 
 The command will appear to hang — that's correct, the tunnel is running.
 
-<!-- screenshot: 08-ssh-tunnel.png -->
+<!-- screenshot: ssh-tunnel.png -->
 > 📸 _Add screenshot: Tunnel command running in local terminal_
 
 Now open your browser:
@@ -127,17 +140,18 @@ http://localhost:18789
 
 You should see the OpenClaw UI.
 
-<!-- screenshot: 09-openclaw-ui.png -->
+<!-- screenshot: openclaw-ui.png -->
 > 📸 _Add screenshot: OpenClaw UI in the browser_
 
 To stop the tunnel: press `Ctrl+C` in the terminal tab running the ssh command.
 
 > **Tip — persistent tunnel via SSH config:**
-> Add this to your `~/.ssh/config` to open the tunnel with a shorter alias:
+> Add this to your `~/.ssh/config` to skip the `-i` flag entirely:
 > ```
 > Host openclaw-vps
 >     HostName YOUR_DROPLET_IP
 >     User root
+>     IdentityFile ~/.ssh/YOUR_KEY_NAME
 >     LocalForward 18789 127.0.0.1:18789
 > ```
 > Then run `ssh openclaw-vps -N` and access `http://localhost:18789`.
