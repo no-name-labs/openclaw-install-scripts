@@ -745,13 +745,15 @@ main() {
   # ── Stage 3/5: LLM provider ────────────────────────────────────────────────
   section "Stage 3/5: LLM provider"
   configure_llm_provider
-  restart_gateway
-  # OAuth flows run after restart (gateway must be up for codex login callback)
-  authenticate_runtime_provider
-  # If OAuth tokens were just written, restart once more to load them
+  # For api_key: credentials are already written — restart now to load them.
+  # For OAuth (codex/oauth): no credentials yet; keep the Stage 2 gateway running
+  # and do the OAuth flow first, then restart once with everything in place.
   case "${RUNTIME_AUTH_METHOD:-api_key}" in
-    codex|oauth) restart_gateway ;;
+    api_key) restart_gateway ;;
   esac
+  authenticate_runtime_provider
+  # After OAuth tokens are written (or always for api_key second-pass safety), restart.
+  restart_gateway
 
   # ── Stage 4/5: Telegram ────────────────────────────────────────────────────
   section "Stage 4/5: Telegram"
