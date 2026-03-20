@@ -104,9 +104,18 @@ Steps:
 3. Send any message — the bot replies with a pairing code.
 4. Return to the terminal and press **Enter** to approve.
 
-Once approved, the bot confirms access and is ready to use:
+### Binding target
 
-![Telegram pairing — access approved and bot responding](screenshots/telegram-pairing.png)
+After pairing, the installer asks where the bot should reply:
+
+- **Group topic** — the bot listens to a specific topic inside a Telegram group (recommended for teams). You'll paste a topic link, e.g. `https://t.me/c/1234567890/2`.
+- **Direct chat** — the bot replies directly in a 1-on-1 chat with you. Simplest option for solo use.
+
+### Result
+
+Once pairing and binding are complete, the bot confirms access and responds immediately:
+
+![Telegram — access approved and bot responding](screenshots/telegram-pairing.png)
 
 ### Install summary
 
