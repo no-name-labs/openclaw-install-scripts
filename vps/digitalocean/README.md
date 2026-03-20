@@ -78,7 +78,7 @@ Your keys are in `C:\Users\YourName\.ssh\` — run `dir $env:USERPROFILE\.ssh\` 
 > ```
 > After that, `ssh root@YOUR_DROPLET_IP` works without `-i`.
 
-**Prefer a GUI?** Use [PuTTY](https://www.putty.org). Enter the droplet IP as the host, then go to **Connection → SSH → Auth → Credentials** and select your private key. PuTTY uses `.ppk` format — if your key is `.pem` or OpenSSH format, convert it first with **PuTTYgen** (included with PuTTY).
+**Prefer a GUI?** Use **PuTTY** — enter the droplet IP as the host, go to **Connection → SSH → Auth → Credentials** and select your private key. PuTTY uses `.ppk` format — convert with **PuTTYgen** if needed.
 
 ---
 
