@@ -244,6 +244,7 @@ stop_gateway() {
 }
 
 start_gateway() {
+  local extra_args="${1:-}"
   mkdir -p "${OPENCLAW_HOME}/logs"
   stop_gateway || true
   (
@@ -251,7 +252,8 @@ start_gateway() {
     export OPENCLAW_STATE_DIR="${OPENCLAW_HOME}"
     export OPENCLAW_CONFIG_PATH="${OPENCLAW_HOME}/openclaw.json"
     [[ -f "${OPENCLAW_HOME}/.env" ]] && { set -a; source "${OPENCLAW_HOME}/.env"; set +a; }
-    nohup openclaw gateway run --port "${OPENCLAW_PORT}" \
+    # shellcheck disable=SC2086
+    nohup openclaw gateway run --port "${OPENCLAW_PORT}" ${extra_args} \
       >"${OPENCLAW_HOME}/logs/gateway-run.log" 2>&1 &
     echo $! > "${OPENCLAW_HOME}/.gateway.pid"
   )
@@ -625,9 +627,10 @@ main() {
 
   mkdir -p "${OPENCLAW_HOME}/logs"
 
-  # Start gateway once to bootstrap the config directory and openclaw.json
+  # Start gateway once to bootstrap the config directory and openclaw.json.
+  # --allow-unconfigured is required because openclaw.json does not exist yet.
   log_info "Starting gateway to initialise config."
-  start_gateway
+  start_gateway "--allow-unconfigured"
   wait_for_gateway 60 || die "Gateway failed to start on first boot."
 
   # ── Stage 3/5: LLM provider ────────────────────────────────────────────────
