@@ -10,7 +10,7 @@ Connect to the UI from your local browser via SSH tunnel — no domain or open p
 - Ubuntu 22.04 or 24.04 droplet (1 GB RAM minimum, 2 GB recommended)
 - Root or sudo access
 - A Telegram bot token — get one from [@BotFather](https://t.me/BotFather)
-- An API key for at least one of: OpenAI, Anthropic, or OpenRouter
+- An API key for OpenAI or Anthropic (or a ChatGPT/Claude subscription for OAuth)
 
 ---
 
@@ -30,7 +30,8 @@ Go to [cloud.digitalocean.com](https://cloud.digitalocean.com) → **Create → 
 
 ![SSH key selection](screenshots/03-create-droplet-ssh-key.png)
 
-> If you don't have an SSH key yet, follow [GitHub's guide to generating one](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent), then add the public key here.
+> If you don't have an SSH key yet, run `ssh-keygen -t ed25519` in your terminal (works on macOS, Linux, and Windows 10/11 PowerShell), then paste the contents of the `.pub` file here.
+> Alternatively, follow [GitHub's guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
 
 Leave all other settings as default. Click **Create Droplet** and wait ~30 seconds.
 
@@ -40,14 +41,16 @@ Once created, copy the droplet's **IPv4 address** from the dashboard.
 
 ## Step 2 — Connect via SSH
 
-Open a terminal on your local machine. If you added an SSH key during droplet creation:
+### macOS / Linux
+
+Open a terminal and run:
 
 ```bash
 ssh -i ~/.ssh/YOUR_KEY_NAME root@YOUR_DROPLET_IP
 ```
 
 Replace `YOUR_KEY_NAME` with the filename of your private key (e.g. `openclaw-vps`, `id_ed25519`, `id_rsa`).
-Your keys are listed in `~/.ssh/` — run `ls ~/.ssh/` if unsure.
+Your keys are in `~/.ssh/` — run `ls ~/.ssh/` if unsure.
 
 > **Tip — skip the `-i` flag:** add an entry to `~/.ssh/config` so the key is picked up automatically:
 > ```
@@ -57,7 +60,29 @@ Your keys are listed in `~/.ssh/` — run `ls ~/.ssh/` if unsure.
 > ```
 > After that, `ssh root@YOUR_DROPLET_IP` works without `-i`.
 
-If you used **password** authentication instead, omit `-i` — you'll be prompted for the password.
+### Windows 10 / 11
+
+OpenSSH is built into Windows. Open **PowerShell** or **Command Prompt** and run:
+
+```powershell
+ssh -i $env:USERPROFILE\.ssh\YOUR_KEY_NAME root@YOUR_DROPLET_IP
+```
+
+Your keys are in `C:\Users\YourName\.ssh\` — run `dir $env:USERPROFILE\.ssh\` if unsure.
+
+> **Tip — SSH config on Windows** works the same way. Create or edit `C:\Users\YourName\.ssh\config`:
+> ```
+> Host YOUR_DROPLET_IP
+>     User root
+>     IdentityFile ~/.ssh/YOUR_KEY_NAME
+> ```
+> After that, `ssh root@YOUR_DROPLET_IP` works without `-i`.
+
+**Prefer a GUI?** Use [PuTTY](https://www.putty.org). Enter the droplet IP as the host, then go to **Connection → SSH → Auth → Credentials** and select your private key. PuTTY uses `.ppk` format — if your key is `.pem` or OpenSSH format, convert it first with **PuTTYgen** (included with PuTTY).
+
+---
+
+If you used **password** authentication instead of SSH key, omit `-i` — you'll be prompted for the password.
 
 You should see the Ubuntu welcome message.
 
@@ -132,7 +157,9 @@ At the end the installer prints a summary including your gateway token.
 OpenClaw's UI runs on the droplet at `localhost:18789`.
 An SSH tunnel forwards that port to your local machine — no domain or firewall changes needed.
 
-**On your local machine** (new terminal tab, keep the droplet SSH session open):
+### macOS / Linux
+
+Open a **new terminal tab** (keep the droplet SSH session open) and run:
 
 ```bash
 ssh -i ~/.ssh/YOUR_KEY_NAME -L 18789:127.0.0.1:18789 root@YOUR_DROPLET_IP -N
@@ -140,10 +167,50 @@ ssh -i ~/.ssh/YOUR_KEY_NAME -L 18789:127.0.0.1:18789 root@YOUR_DROPLET_IP -N
 
 The command will appear to hang — that's correct, the tunnel is running.
 
+> **Tip — persistent tunnel via SSH config:**
+> Add this to `~/.ssh/config` to skip the `-i` flag entirely:
+> ```
+> Host openclaw-vps
+>     HostName YOUR_DROPLET_IP
+>     User root
+>     IdentityFile ~/.ssh/YOUR_KEY_NAME
+>     LocalForward 18789 127.0.0.1:18789
+> ```
+> Then run `ssh openclaw-vps -N` and access `http://localhost:18789`.
+
+### Windows 10 / 11
+
+Open a **new PowerShell or Command Prompt window** and run the same command:
+
+```powershell
+ssh -i $env:USERPROFILE\.ssh\YOUR_KEY_NAME -L 18789:127.0.0.1:18789 root@YOUR_DROPLET_IP -N
+```
+
+The window will appear to hang — that's correct, the tunnel is running. Keep it open.
+
+> **Tip — SSH config on Windows** also supports `LocalForward`. Edit `C:\Users\YourName\.ssh\config`:
+> ```
+> Host openclaw-vps
+>     HostName YOUR_DROPLET_IP
+>     User root
+>     IdentityFile ~/.ssh/YOUR_KEY_NAME
+>     LocalForward 18789 127.0.0.1:18789
+> ```
+> Then run `ssh openclaw-vps -N`.
+
+**PuTTY users:** load your saved session, go to **Connection → SSH → Tunnels**, and add:
+- Source port: `18789`
+- Destination: `127.0.0.1:18789`
+- Type: **Local**
+
+Click **Add**, then **Open** — the tunnel runs while PuTTY is connected.
+
+---
+
 <!-- screenshot: ssh-tunnel.png -->
 > 📸 _Add screenshot: Tunnel command running in local terminal_
 
-Now open your browser:
+Now open your browser on your local machine:
 
 ```
 http://localhost:18789
@@ -154,18 +221,7 @@ You should see the OpenClaw UI.
 <!-- screenshot: openclaw-ui.png -->
 > 📸 _Add screenshot: OpenClaw UI in the browser_
 
-To stop the tunnel: press `Ctrl+C` in the terminal tab running the ssh command.
-
-> **Tip — persistent tunnel via SSH config:**
-> Add this to your `~/.ssh/config` to skip the `-i` flag entirely:
-> ```
-> Host openclaw-vps
->     HostName YOUR_DROPLET_IP
->     User root
->     IdentityFile ~/.ssh/YOUR_KEY_NAME
->     LocalForward 18789 127.0.0.1:18789
-> ```
-> Then run `ssh openclaw-vps -N` and access `http://localhost:18789`.
+To stop the tunnel: press `Ctrl+C` in the terminal/PowerShell window (or close PuTTY).
 
 ---
 
